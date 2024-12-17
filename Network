@@ -5,47 +5,52 @@ local velMax = (128 ^ 2)
 local timeRelease, timeChoke = 0.015, 0.105
 
 -- Function aliases
-local Property, Wait = sethiddenproperty, wait
-local Radian, Random, Ceil = math.rad, math.random, math.ceil
+local Property = sethiddenproperty
+local Wait = wait
+local Radian = math.rad
+local Random = math.random
+local Ceil = math.ceil
 local Angle = CFrame.Angles
 local Vector = Vector3.new
 local Service = game.GetService
 
 -- Services
 local Run = Service(game, 'RunService')
-local statPing = Service(game, 'Stats').PerformanceStats.Ping
-local Root = Service(game, 'Players').LocalPlayer.Character.HumanoidRootPart
+local Stats = Service(game, 'Stats')
+local Players = Service(game, 'Players')
 local Input = Service(game, 'UserInputService')
 
--- Connections
-local runRen, runBeat = Run.RenderStepped, Run.Heartbeat
-local runRenWait, runRenCon = runRen.Wait, runRen.Connect
-local runBeatCon = nil -- Updated to handle toggling
+local statPing = Stats.PerformanceStats.Ping
+local Player = Players.LocalPlayer
+local Root = Player.Character.HumanoidRootPart
 
 -- Ping function
 local Ping = statPing.GetValue
 
+-- Connections
+local runBeatCon
+
 -- Client replication choking/sleeping
 local function Sleep()
-	return Property(Root, 'NetworkIsSleeping', true)
+	Property(Root, 'NetworkIsSleeping', true)
 end
 
 -- Initialization
 local function Init()
 	local rootVel = Root.Velocity
 	local rootAng = Random(-180, 180)
-	local rootOffset do
-		local X = Random(-velMax, velMax)
-		local Y = Random(0, velMax)
-		local Z = Random(-velMax, velMax)
-		rootOffset = Vector(X, -Y, Z)
-	end
+
+	local rootOffset = Vector(
+		Random(-velMax, velMax),
+		-Random(0, velMax),
+		Random(-velMax, velMax)
+	)
 
 	Root.CFrame *= Angle(0, Radian(rootAng), 0)
 	Root.Velocity = rootOffset
 
-	-- Miscellaneous velocities (rotational, linear, angular)
-	runRenWait(runRen) -- Quickly synchronize velocity before rendering (smoother?)
+	-- Synchronize velocity before rendering
+	Run.RenderStepped:Wait()
 	Root.CFrame *= Angle(0, Radian(-rootAng), 0)
 	Root.Velocity = rootVel
 end
@@ -60,9 +65,10 @@ local function Toggle()
 			Init()
 
 			-- Stable replication packets
-			local chokeClient, chokeServer = Run.Heartbeat:Connect(Sleep), Run.RenderStepped:Connect(Sleep)
+			local chokeClient = Run.Heartbeat:Connect(Sleep)
+			local chokeServer = Run.RenderStepped:Connect(Sleep)
 
-			-- Ping-based choke time (replace with timeChoke for constant time)
+			-- Ping-based choke time
 			Wait(Ceil(Ping(statPing)) / 1000)
 
 			-- Disconnect choke connections
@@ -80,8 +86,7 @@ end
 
 -- Bind to key B
 Input.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.B then
+	if not gameProcessed and input.KeyCode == Enum.KeyCode.B then
 		Toggle()
 	end
 end)
